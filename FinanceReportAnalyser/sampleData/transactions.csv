@@ -1,0 +1,11 @@
+type,category,amount
+income,stipend,52372
+income,borrow,10000
+expense,Medicine,42000
+expense,Transport,1325
+expense,UnexpectedExpenses,12345.81
+expense,Groceries,0.01
+expense,borrow,23000
+expense,flin,4000
+income,salary,123.23232
+expense,Transport,0
