@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <None Update="sampleData/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="runtime/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
