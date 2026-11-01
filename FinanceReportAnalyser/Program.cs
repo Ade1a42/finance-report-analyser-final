@@ -631,5 +631,29 @@ public class Program
         Console.WriteLine("5. File failures");
         Console.WriteLine("Missing file: " + ResultText(FileImporter.Import(Path.Combine(dataFolder, "no_such_file.csv"))));
         Console.WriteLine("Malformed file: " + ResultText(FileImporter.Import(Path.Combine(dataFolder, "malformed.csv"))));
+
+
+        Console.WriteLine();
+        Console.WriteLine("6. Assignment 8: lazy preview, reports, native call, export");
+        var csvPath = Path.Combine(dataFolder, "transactions.csv");
+        var preview = LazyImporter.StreamTransactions(LazyImporter.FromFile(csvPath)).Take(3).ToList();
+        Console.WriteLine($"Streamed preview of {preview.Count} transactions (file closed after Take).");
+
+        var scorers = new[] { ("strict", Scoring.CreateScore(2m)), ("relaxed", Scoring.CreateScore(1m)) };
+        foreach (var (name, scorer) in scorers)
+        {
+            var exportPath = Path.Combine(AppContext.BaseDirectory, $"report_{name}.txt");
+            var run = Analysis.RunFromFile(csvPath, exportPath, 1000m, scorer);
+            switch (run)
+            {
+                case Result<AnalysisReport>.Ok ok:
+                    Console.WriteLine($"-- {name} scorer --");
+                    Console.WriteLine(ReportExporter.Format(ok.Value));
+                    break;
+                case Result<AnalysisReport>.Error err:
+                    Console.WriteLine($"Failed: [{err.ErrorDetails.Code}] {err.ErrorDetails.Message}");
+                    break;
+            }
+        }
     }
 }
