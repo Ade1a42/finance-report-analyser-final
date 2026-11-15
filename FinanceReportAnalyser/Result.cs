@@ -4,8 +4,25 @@ public abstract record Result<T>
 {
     private Result() { }
 
-    public sealed record Ok(T Value) : Result<T>;
-    public sealed record Error(DomainError ErrorDetails) : Result<T>;
+    public sealed record Ok : Result<T>
+    {
+        public T Value { get; }
+
+        internal Ok(T value)
+        {
+            Value = value ?? throw new ArgumentNullException(nameof(value));
+        }
+    }
+
+    public sealed record Error : Result<T>
+    {
+        public DomainError ErrorDetails { get; }
+
+        internal Error(DomainError errorDetails)
+        {
+            ErrorDetails = errorDetails ?? throw new ArgumentNullException(nameof(errorDetails));
+        }
+    }
 
     public static Result<T> Success(T value)
     {
