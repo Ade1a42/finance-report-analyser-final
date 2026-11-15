@@ -4,7 +4,6 @@
 **Course:** Introduction to Functional Programming
 **Repository:** https://github.com/Ade1a42/finance-report-analyser-final
 **Branch:** main
-**Final commit:** 
 
 ## What the application does
 A console personal-finance analyser. You type or import transactions (`type,category,amount`), the program validates each one, keeps them in a budget period (Open or Closed), and produces a summary, two reports, a savings rate (calculated by a C library) and an exported report file. The program runs in a menu loop until you choose 0.
