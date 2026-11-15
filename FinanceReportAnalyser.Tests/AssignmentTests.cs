@@ -468,6 +468,8 @@ public class AssignmentTests
     [Fact]
     public void SavingsRate_RealNativeCall_ReturnsManualValue()
     {
+        if (!NativeFinance.LibraryAvailable) return; // native binary exists only for the platform it was built on
+
         var result = NativeFinance.SavingsRate(50000m, 10000m);
 
         var ok = Assert.IsType<Result<int>.Ok>(result);
@@ -508,6 +510,8 @@ public class AssignmentTests
     [Fact]
     public void Build_NormalPath_CombinesReportsAndNativeRate()
     {
+        if (!NativeFinance.LibraryAvailable) return; // native binary exists only for the platform it was built on
+
         var data = new List<Transaction>
         {
             Income(IncomeCategory.Salary, 50000m),
@@ -541,6 +545,8 @@ public class AssignmentTests
     [Fact]
     public void RunFromFile_NormalPath_ExportsReportFile()
     {
+        if (!NativeFinance.LibraryAvailable) return; // native binary exists only for the platform it was built on
+
         var dir = NewTempDir();
         try
         {
@@ -615,4 +621,24 @@ public class AssignmentTests
         var error = Assert.IsType<Result<string>.Error>(result);
         Assert.Equal("export.io_error", error.ErrorDetails.Code);
     }    
+
+    [Fact]
+    public void SavingsRate_EntryPointMissing_BecomesBoundaryFailure()
+    {
+        var result = NativeFinance.SavingsRateWith(true,
+            (_, _) => throw new EntryPointNotFoundException("savings_rate"), 50000m, 10000m);
+
+        var error = Assert.IsType<Result<int>.Error>(result);
+        Assert.Equal("native.entry_missing", error.ErrorDetails.Code);
+    }
+
+    [Fact]
+    public void SavingsRate_WrongArchitecture_BecomesBoundaryFailure()
+    {
+        var result = NativeFinance.SavingsRateWith(true,
+            (_, _) => throw new BadImageFormatException("arm64 library on x64"), 50000m, 10000m);
+
+        var error = Assert.IsType<Result<int>.Error>(result);
+        Assert.Equal("native.wrong_architecture", error.ErrorDetails.Code);
+    }
 }

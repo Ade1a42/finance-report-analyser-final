@@ -549,6 +549,172 @@ public class Program
 
     static void Main()
     {
+        RunMenu();
+    }
+
+    private static void RunMenu()
+    {
+        BudgetPeriod period = new OpenPeriod(new List<Transaction>());
+        var dataFolder = Path.Combine(AppContext.BaseDirectory, "sampleData");
+
+        while (true)
+        {
+            Console.WriteLine();
+            Console.WriteLine("=== Finance Report Analyser ===");
+            Console.WriteLine("1 Add a transaction (type,category,amount)");
+            Console.WriteLine("2 Show summary");
+            Console.WriteLine("3 Close the period");
+            Console.WriteLine("4 Import a CSV file");
+            Console.WriteLine("5 Find an expense category total");
+            Console.WriteLine("6 Reports + native savings rate + export");
+            Console.WriteLine("7 Start a new empty period");
+            Console.WriteLine("8 Run the built-in demo");
+            Console.WriteLine("0 Exit");
+            Console.Write("Choose: ");
+
+            var choice = Console.ReadLine()?.Trim();
+            if (choice is null || choice == "0") break;
+
+            switch (choice)
+            {
+                case "1": period = AddFromConsole(period); break;
+                case "2": ShowSummary(period); break;
+                case "3": period = CloseFromConsole(period); break;
+                case "4": period = ImportFromConsole(period, dataFolder); break;
+                case "5": LookupFromConsole(period); break;
+                case "6": ReportsFromConsole(period); break;
+                case "7": period = new OpenPeriod(new List<Transaction>()); Console.WriteLine("New empty period."); break;
+                case "8": RunDemo(); break;
+                default: Console.WriteLine("Unknown option."); break;
+            }
+        }
+    }
+
+    private static string AskPolicyName()
+    {
+        Console.Write("Policy: 1 = AllMoneyIn, 2 = EarnedOnly (default 1): ");
+        return Console.ReadLine()?.Trim() == "2" ? "EarnedOnly" : "AllMoneyIn";
+    }
+
+    private static Func<IncomeTransaction, bool> PolicyByName(string name) =>
+        name == "EarnedOnly" ? FinancePipeline.EarnedOnly : FinancePipeline.AllMoneyIn;
+
+    private static Func<ExpenseTransaction, decimal> AskScorer()
+    {
+        Console.Write("Scorer: 1 = strict (weight 2), 2 = relaxed (weight 1) (default 1): ");
+        return Console.ReadLine()?.Trim() == "2" ? Scoring.CreateScore(1m) : Scoring.CreateScore(2m);
+    }
+
+    private static FinanceSummary SummaryOf(BudgetPeriod period, Func<IncomeTransaction, bool> policy) =>
+        period switch
+        {
+            OpenPeriod open => FinancePipeline.Run(open.Transactions, policy),
+            ClosedPeriod closed => closed.Summary,
+            _ => throw new InvalidOperationException()
+        };
+
+    private static BudgetPeriod AddFromConsole(BudgetPeriod period)
+    {
+        Console.Write("Line (for example expense,Medicine,4200): ");
+        var line = Console.ReadLine();
+
+        var result = TransactionParser.ParseLine(line)
+            .Bind(transaction => BudgetPeriodManager.AddTransaction(period, transaction));
+
+        switch (result)
+        {
+            case Result<BudgetPeriod>.Ok ok:
+                Console.WriteLine("Added.");
+                return ok.Value;
+            case Result<BudgetPeriod>.Error err:
+                Console.WriteLine($"Rejected: [{err.ErrorDetails.Code}] {err.ErrorDetails.Message}");
+                return period;
+            default:
+                throw new InvalidOperationException();
+        }
+    }
+
+    private static void ShowSummary(BudgetPeriod period)
+    {
+        var name = AskPolicyName();
+        PrintSummary(name, SummaryOf(period, PolicyByName(name)));
+    }
+
+    private static BudgetPeriod CloseFromConsole(BudgetPeriod period)
+    {
+        var name = AskPolicyName();
+        var result = BudgetPeriodManager.ClosePeriod(period, PolicyByName(name));
+
+        switch (result)
+        {
+            case Result<BudgetPeriod>.Ok ok:
+                Console.WriteLine("Period closed.");
+                return ok.Value;
+            case Result<BudgetPeriod>.Error err:
+                Console.WriteLine($"Rejected: [{err.ErrorDetails.Code}] {err.ErrorDetails.Message}");
+                return period;
+            default:
+                throw new InvalidOperationException();
+        }
+    }
+
+    private static BudgetPeriod ImportFromConsole(BudgetPeriod period, string dataFolder)
+    {
+        Console.Write("CSV path (Enter = sampleData/transactions.csv): ");
+        var input = Console.ReadLine()?.Trim();
+        var path = string.IsNullOrEmpty(input) ? Path.Combine(dataFolder, "transactions.csv") : input;
+
+        switch (FileImporter.Import(path))
+        {
+            case Result<ImportResult>.Ok ok:
+                Console.WriteLine($"Accepted {ok.Value.ValidTransactions.Count}, rejected {ok.Value.ImportErrors.Count} lines.");
+                foreach (var error in ok.Value.ImportErrors)
+                    Console.WriteLine($"  line {error.LineNumber}: [{error.Code}] {error.Message}");
+                return new OpenPeriod(ok.Value.ValidTransactions);
+            case Result<ImportResult>.Error err:
+                Console.WriteLine($"Import failed: [{err.ErrorDetails.Code}] {err.ErrorDetails.Message}");
+                return period;
+            default:
+                throw new InvalidOperationException();
+        }
+    }
+
+    private static void LookupFromConsole(BudgetPeriod period)
+    {
+        Console.Write("Expense category: ");
+        var name = Console.ReadLine() ?? "";
+        var summary = SummaryOf(period, FinancePipeline.AllMoneyIn);
+        Console.WriteLine(OptionText(SummaryLookup.FindExpenseTotal(summary, name)));
+    }
+
+    private static void ReportsFromConsole(BudgetPeriod period)
+    {
+        if (period is not OpenPeriod open)
+        {
+            Console.WriteLine("Reports need an open period with transactions. Use option 4 or 7.");
+            return;
+        }
+
+        var scorer = AskScorer();
+        var exportPath = Path.Combine(AppContext.BaseDirectory, "report_menu.txt");
+
+        var built = Analysis.Build(open.Transactions, 1000m, scorer, NativeFinance.SavingsRate);
+        var exported = built.Bind(report => ReportExporter.Export(exportPath, report).Map(_ => report));
+
+        switch (exported)
+        {
+            case Result<AnalysisReport>.Ok ok:
+                Console.WriteLine(ReportExporter.Format(ok.Value));
+                Console.WriteLine($"Exported to {exportPath}");
+                break;
+            case Result<AnalysisReport>.Error err:
+                Console.WriteLine($"Failed: [{err.ErrorDetails.Code}] {err.ErrorDetails.Message}");
+                break;
+        }
+    }
+
+    private static void RunDemo()
+    {
         var dataFolder = Path.Combine(AppContext.BaseDirectory, "sampleData");
 
         Console.WriteLine("1. Normal path");
